@@ -10,11 +10,7 @@ contract Minime is Controlled {
     using SafeMath for uint;
 
     struct  Checkpoint {
-
-        // `fromBlock` is the block number that the value was generated from
         uint128 fromBlock;
-        
-        // `value` is the amount of tokens at a specific block number
         uint128 value;
     }
 
@@ -25,7 +21,7 @@ contract Minime is Controlled {
 
     // `parentToken` is the Token address that was cloned to produce this token;
     //  it will be 0x0 for a token that was not cloned
-    MiniMeToken public parentToken;
+    Minime public parentToken;
 
     // `parentSnapShotBlock` is the block number from the Parent Token that was
     //  used to determine the initial distribution of the Clone Token
@@ -68,7 +64,7 @@ contract Minime is Controlled {
     /// @param _decimalUnits Number of decimals of the new token
     /// @param _tokenSymbol Token Symbol for the new token
     /// @param _transfersEnabled If true, tokens will be able to be transferred
-    function MiniMeToken(
+    function Minime(
         address _tokenFactory,
         address _parentToken,
         uint _parentSnapShotBlock,
@@ -81,7 +77,7 @@ contract Minime is Controlled {
         name = _tokenName;                                 // Set the name
         decimals = _decimalUnits;                          // Set the decimals
         symbol = _tokenSymbol;                             // Set the symbol
-        parentToken = MiniMeToken(_parentToken);
+        parentToken = Minime(_parentToken);
         parentSnapShotBlock = _parentSnapShotBlock;
         transfersEnabled = _transfersEnabled;
         creationBlock = block.number;
@@ -101,7 +97,9 @@ contract Minime is Controlled {
     /// @param _amount The amount of tokens to be transferred
     /// @return Whether the transfer was successful or not
     function transfer(address _to, uint256 _amount) 
-        onlyIfTransfersEnabled returns (bool success) {
+        onlyIfTransfersEnabled 
+        returns (bool success) 
+    {
         return doTransfer(msg.sender, _to, _amount);
     }
 
@@ -111,18 +109,20 @@ contract Minime is Controlled {
     /// @param _to The address of the recipient
     /// @param _amount The amount of tokens to be transferred
     /// @return True if the transfer was successful
-    function transferFrom(address _from, address _to, uint256 _amount) 
-        returns (bool success) {
-
+    function transferFrom(address _from, 
+                          address _to, 
+                          uint256 _amount) 
+        returns (bool success)
+    {
         // The controller of this contract can move tokens around at will,
-        //  this is important to recognize! Confirm that you trust the
-        //  controller of this contract, which in most situations should be
-        //  another open source smart contract or 0x0
+        // this is important to recognize! Confirm that you trust the
+        // controller of this contract, which in most situations should be
+        // another open source smart contract or 0x0.
         if (msg.sender != controller) {
             require(transfersEnabled);
 
             // The standard ERC 20 transferFrom functionality
-            if (allowed[_from][msg.sender] < _amount) return false;
+            require(allowed[_from][msg.sender] >= _amount);
             allowed[_from][msg.sender] -= _amount;
         }
         return doTransfer(_from, _to, _amount);
@@ -134,14 +134,13 @@ contract Minime is Controlled {
     /// @param _to The address of the recipient
     /// @param _amount The amount of tokens to be transferred
     /// @return True if the transfer was successful
-    function doTransfer(address _from, address _to, uint _amount) 
-        internal returns(bool) {
-
-        if (_amount == 0) {
-            return true;
-        }
-
-        assert(parentSnapShotBlock < block.number);
+    function doTransfer(address _from,
+                        address _to, 
+                        uint _amount) 
+        internal returns(bool)
+    {
+        require(_amount > 0);
+        require(parentSnapShotBlock < block.number);
 
         // Do not allow transfer to 0x0 or the token contract itself
         require((_to != 0) && (_to != address(this)));
@@ -149,9 +148,7 @@ contract Minime is Controlled {
         // If the amount being transfered is more than the balance of the
         //  account the transfer returns false
         var previousBalanceFrom = balanceOfAt(_from, block.number);
-        if (previousBalanceFrom < _amount) {
-            return false;
-        }
+        require(previousBalanceFrom >= _amount);
 
         // Alerts the token controller of the transfer
         if (isContract(controller)) {
@@ -178,7 +175,9 @@ contract Minime is Controlled {
 
     /// @param _owner The address that's balance is being requested
     /// @return The balance of `_owner` at the current block
-    function balanceOf(address _owner) constant returns (uint256 balance) {
+    function balanceOf(address _owner)
+        constant returns (uint256 balance)
+    {
         return balanceOfAt(_owner, block.number);
     }
 
@@ -189,8 +188,9 @@ contract Minime is Controlled {
     /// @param _amount The amount of tokens to be approved for transfer
     /// @return True if the approval was successful
     function approve(address _spender, uint256 _amount) 
-        onlyIfTransfersEnabled returns (bool success) {
-
+        onlyIfTransfersEnabled
+        returns (bool success)
+    {
         // To change the approve amount you first have to reduce the addresses`
         //  allowance to zero by calling `approve(_spender,0)` if it is not
         //  already 0 to mitigate the race condition described here:
@@ -214,7 +214,8 @@ contract Minime is Controlled {
     /// @return Amount of remaining tokens of _owner that _spender is allowed
     ///  to spend
     function allowance(address _owner, address _spender) 
-        constant returns (uint256 remaining) {
+        constant returns (uint256 remaining)
+    {
         return allowed[_owner][_spender];
     }
 
@@ -225,8 +226,11 @@ contract Minime is Controlled {
     /// @param _spender The address of the contract able to transfer the tokens
     /// @param _amount The amount of tokens to be approved for transfer
     /// @return True if the function call was successful
-    function approveAndCall(address _spender, uint256 _amount, bytes _extraData) 
-        returns (bool success) {
+    function approveAndCall(address _spender,
+                            uint256 _amount,
+                            bytes _extraData) 
+        returns (bool success)
+    {
         require(approve(_spender, _amount));
 
         ApproveAndCallFallBack(_spender).receiveApproval(
@@ -241,7 +245,9 @@ contract Minime is Controlled {
 
     /// @dev This function makes it easy to get the total number of tokens
     /// @return The total number of tokens
-    function totalSupply() constant returns (uint) {
+    function totalSupply()
+        constant returns (uint)
+    {
         return totalSupplyAt(block.number);
     }
 
@@ -255,8 +261,8 @@ contract Minime is Controlled {
     /// @param _blockNumber The block number when the balance is queried
     /// @return The balance at `_blockNumber`
     function balanceOfAt(address _owner, uint _blockNumber) 
-        constant returns (uint) {
-
+        constant returns (uint)
+    {
         // These next few lines are used when the balance of the token is
         //  requested before a check point was ever created for this token, it
         //  requires that the `parentToken.balanceOfAt` be queried at the
@@ -280,8 +286,9 @@ contract Minime is Controlled {
     /// @notice Total amount of tokens at a specific `_blockNumber`.
     /// @param _blockNumber The block number when the totalSupply is queried
     /// @return The total amount of tokens at `_blockNumber`
-    function totalSupplyAt(uint _blockNumber) constant returns(uint) {
-
+    function totalSupplyAt(uint _blockNumber)
+        constant returns(uint)
+    {
         // These next few lines are used when the totalSupply of the token is
         //  requested before a check point was ever created for this token, it
         //  requires that the `parentToken.totalSupplyAt` be queried at the
@@ -348,7 +355,9 @@ contract Minime is Controlled {
     /// @param _amount The quantity of tokens generated
     /// @return True if the tokens are generated correctly
     function generateTokens(address _owner, uint _amount) 
-        onlyController returns (bool) {
+        onlyController 
+        returns (bool)
+    {
         uint curTotalSupply = getValueAt(totalSupplyHistory, block.number);
         // if (curTotalSupply + _amount < curTotalSupply) throw; // Check for overflow
         updateValueAtNow(totalSupplyHistory, curTotalSupply.add(_amount));
@@ -366,7 +375,8 @@ contract Minime is Controlled {
     /// `onlyController`
     /// @return True if the tokens are burned correctly
     function destroyTokens(address _owner, uint _amount) 
-        onlyController returns (bool) 
+        onlyController
+        returns (bool) 
     {
         uint curTotalSupply = getValueAt(totalSupplyHistory, block.number);
         assert(curTotalSupply >= _amount);
